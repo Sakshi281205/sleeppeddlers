@@ -1,0 +1,16 @@
+# Frontend build artifacts
+frontend/node_modules/
+frontend/.next/
+frontend/.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/
+.idea/
+
+
