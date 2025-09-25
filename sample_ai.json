@@ -1,0 +1,8 @@
+{
+    "patient_id": "12345",
+    "findings": "Possible small intracranial hemorrhage in left temporal lobe. Mild midline shift observed.",
+    "confidence": 0.92,
+    "modality": "CT",
+    "body_part": "Head"
+  }
+  
