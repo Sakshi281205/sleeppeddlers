@@ -1,0 +1,12 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "sleeppeddlers"
+resolve_s3 = true
+s3_prefix = "sleeppeddlers"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "BucketName=\"sleeppeddlers\" ApiKeyValue=\"sleeppeddlers\" AllowOrigin=\"*\" AiLambdaName=\"ai-analysis-function\" LlmLambdaName=\"llm-processing-function\""
+image_repositories = []
