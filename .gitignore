@@ -1,0 +1,15 @@
+
+# Node/Next
+node_modules
+.next
+out
+
+# If your app is under ./frontend/
+frontend/node_modules
+frontend/.next
+frontend/out
+
+# Env & misc
+.env*
+*.log
+.DS_Store
