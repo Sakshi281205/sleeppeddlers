@@ -223,3 +223,28 @@ fi
 echo "Done."
 
 
+#!/bin/bash
+set -e
+
+# --- IBM watsonx Credentials ---
+export IBM_API_KEY="c5DelgicCyGihx2uhO_mMHbd947T8thCryH0gpmJPj7t"
+export IBM_PROJECT_ID="6235eeea-a75e-4bf1-9b83-80acd61368ee"
+export IBM_INSTANCE_ID="e98d7be2-9d7c-4f45-a167-0831c0fc1580"
+export IBM_URL="https://us-south.ml.cloud.ibm.com"
+
+STACK_NAME="sleeppeddlers-stack"
+REGION="us-east-1"
+
+sam_redeploy() {
+  sam build
+  sam deploy \
+    --stack-name $STACK_NAME \
+    --region $REGION \
+    --resolve-s3 \
+    --capabilities CAPABILITY_IAM \
+    --parameter-overrides \
+      IBMApiKey=$IBM_API_KEY \
+      IBMProjectId=$IBM_PROJECT_ID \
+      IBMInstanceId=$IBM_INSTANCE_ID \
+      IBMUrl=$IBM_URL
+}

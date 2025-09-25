@@ -302,3 +302,32 @@ Resources:
 Outputs:
   ApiBaseUrl:
     Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/prod"
+
+Parameters:
+  IBMApiKey:
+    Type: String
+  IBMProjectId:
+    Type: String
+  IBMInstanceId:
+    Type: String
+  IBMUrl:
+    Type: String
+    Default: "https://us-south.ml.cloud.ibm.com"
+
+Resources:
+  LlmLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: llm-processing-function
+      Handler: llm_processor.lambda_handler
+      Runtime: python3.9
+      Timeout: 300
+      MemorySize: 1024
+      CodeUri: llm_lambda/
+      Environment:
+        Variables:
+          IBM_API_KEY: !Ref IBMApiKey
+          IBM_PROJECT_ID: !Ref IBMProjectId
+          IBM_INSTANCE_ID: !Ref IBMInstanceId
+          IBM_URL: !Ref IBMUrl
+
