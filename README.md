@@ -1,6 +1,4 @@
-# sleeppeddlers
-
-🚀 Real-time Multi-Specialty Diagnostic Platform
+# 🚀 Real-time Multi-Specialty Diagnostic Platform #
 
 Executive Summary: Universal, Real-Time Healthcare Intelligence 🧠🫀
 
@@ -8,7 +6,7 @@ SLEEPPEDDLERS is a next-generation, AI-powered diagnostic platform designed to p
 
 By leveraging the full power of Amazon HealthLake Imaging as our central, secure data repository and an augmented AI pipeline powered by the IBM Granite LLM, the system delivers immediate, evidence-based clinical insights. This shifts the process from specialized, delayed interpretation to an automated, comprehensive analysis, ensuring rapid, accurate diagnosis for every department that utilizes CT, MRI, X-ray, or other medical scans.
 
-The Clinical Challenge
+# The Clinical Challenge #
 Current hospital systems often operate in silos:
 
 Specialty Bottlenecks: Delays are not unique to the ED; they impact Neurology, Cardiology, and other departments waiting for subspecialty radiologist reports.
@@ -19,7 +17,7 @@ Variability in Care: Access to specialized expertise can fluctuate, leading to i
 
 Our platform solves this by creating a unified, AI-driven diagnostic engine for all imaging data ingested into HealthLake.
 
-🧠 System Architecture: The Universal Diagnostic Engine
+# 🧠 System Architecture: The Universal Diagnostic Engine #
 Our architecture is a scalable, multi-specialty diagnostic pipeline built for security, speed, and comprehensive coverage. Amazon HealthLake Imaging is the core foundational layer, centralizing all DICOM data and enabling FHIR-compliant workflows across the entire system.
 
 Core Components & Roles
@@ -31,7 +29,7 @@ Amazon OpenSearch (RAG)	Comprehensive Clinical Knowledge Base. Stores guidelines
 IBM Granite LLM	Structured Clinical Synthesis. Generates detailed, specialty-specific clinical reports and plain-language summaries from multi-model findings and RAG context.	Creates cohesive, easy-to-read reports that are tailored to the reading clinician (e.g., Cardiologist vs. Neurologist).
 Amazon SNS & API Gateway	Departmental Alert Delivery. Integrates with EHR, PACS, and departmental systems to deliver specialized alerts to the relevant care team.	Prioritizes alerts based on specialty and criticality, ensuring the right doctor gets the right information instantly.
 
-Export to Sheets
+# Export to Sheets #
 💾 Data Flow: The Universal Analysis Cycle
 The system maintains its event-driven speed while applying a broader, smarter analysis:
 
@@ -47,7 +45,7 @@ Clinical Synthesis (IBM Granite LLM): The LLM synthesizes the complex multi-spec
 
 Departmental Delivery (SNS/API Gateway): The final report is routed and delivered instantaneously to the specific specialty's dashboard, EHR, and mobile notification channels.
 
-📈 Impact: Redefining Diagnostic Excellence
+# 📈 Impact: Redefining Diagnostic Excellence
 The expanded scope delivers exponential value across the entire healthcare system:
 
 Impact Area	Previous Limitation	SLEEPPEDDLERS Solution
