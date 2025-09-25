@@ -1,0 +1,312 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: sleeppeddlers – API+S3+Lambda flow with DLQs, metrics, validation, tracing
+
+Parameters:
+  BucketName: { Type: String }
+  ApiKeyValue: { Type: String }
+  AllowOrigin: { Type: String, Default: "*" }
+  AiLambdaName: { Type: String, Default: ai-analysis-function }
+  LlmLambdaName: { Type: String, Default: llm-processing-function }
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 15
+    MemorySize: 512
+    Tracing: Active
+    Environment:
+      Variables:
+        BUCKET_NAME: !Ref BucketName
+        AI_LAMBDA_NAME: !Ref AiLambdaName
+        LLM_LAMBDA_NAME: !Ref LlmLambdaName
+        LOG_LEVEL: INFO
+    DeadLetterQueue:
+      Type: SQS
+      TargetArn: !GetAtt GlobalDLQ.Arn
+    Events: {}  # per-function
+  Api:
+    TracingEnabled: true
+    AccessLogSetting:
+      DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+      Format: '{ "requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength" }'
+
+Resources:
+  # ---------- S3 ----------
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      VersioningConfiguration: { Status: Enabled }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireTemp
+            Status: Enabled
+            Prefix: uploads/
+            ExpirationInDays: 7
+          - Id: ExpireIntermediates
+            Status: Enabled
+            Prefix: ai-results/
+            ExpirationInDays: 14
+
+  # S3 -> Lambda notification
+  MedicalProcessorPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref MedicalProcessorFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt DataBucket.Arn
+
+  # ---------- Logging ----------
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/apigw/sleeppeddlers
+      RetentionInDays: 7
+
+  GlobalDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: sleeppeddlers-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  # ---------- API Gateway ----------
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: sleeppeddlers-api
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,x-api-key'"
+        AllowOrigin: !Sub "'${AllowOrigin}'"
+      Auth:
+        ApiKeyRequired: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          MetricsEnabled: true
+          LoggingLevel: INFO
+          DataTraceEnabled: false
+          ThrottlingRateLimit: 50
+          ThrottlingBurstLimit: 25
+      DefinitionBody:
+        openapi: 3.0.1
+        info: { title: sleeppeddlers, version: '1.0' }
+        paths:
+          /upload:
+            post:
+              security: [ { api_key: [] } ]
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      required: [image, filename, content_type]
+                      properties:
+                        image: { type: string }
+                        filename: { type: string }
+                        content_type: { type: string }
+              responses:
+                '200': { description: OK }
+          /status/{job_id}:
+            get:
+              security: [ { api_key: [] } ]
+              parameters:
+                - in: path
+                  name: job_id
+                  required: true
+                  schema: { type: string }
+              responses:
+                '200': { description: OK }
+                '202': { description: Processing }
+                '404': { description: Not found }
+          /results/{job_id}:
+            get:
+              security: [ { api_key: [] } ]
+              parameters:
+                - in: path
+                  name: job_id
+                  required: true
+                  schema: { type: string }
+              responses:
+                '200': { description: OK }
+                '404': { description: Not found }
+        components:
+          securitySchemes:
+            api_key:
+              type: apiKey
+              name: x-api-key
+              in: header
+
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Enabled: true
+      Name: sleeppeddlers-api-key
+      Value: !Ref ApiKeyValue
+
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: sleeppeddlers-plan
+      Throttle:
+        RateLimit: 50
+        BurstLimit: 25
+      Quota:
+        Limit: 100000
+        Period: MONTH
+      ApiStages:
+        - ApiId: !Ref Api
+          Stage: prod
+
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+  # ---------- Lambdas (APIs) ----------
+  UploadApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: upload-api-handler
+      CodeUri: ../lambdas/upload_api/
+      Handler: handler.lambda_handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: [ 's3:PutObject', 's3:PutObjectAcl' ]
+              Resource:
+                - !Sub arn:aws:s3:::${BucketName}/uploads/*
+                - !Sub arn:aws:s3:::${BucketName}/jobs/*
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties: { Path: /upload, Method: post, RestApiId: !Ref Api, Auth: { ApiKeyRequired: true } }
+
+  StatusApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: status-api-handler
+      CodeUri: ../lambdas/status_api/
+      Handler: handler.lambda_handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: [ 's3:GetObject', 's3:HeadObject' ]
+              Resource:
+                - !Sub arn:aws:s3:::${BucketName}/jobs/*
+                - !Sub arn:aws:s3:::${BucketName}/results/*
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties: { Path: /status/{job_id}, Method: get, RestApiId: !Ref Api, Auth: { ApiKeyRequired: true } }
+
+  ResultsApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: results-api-handler
+      CodeUri: ../lambdas/results_api/
+      Handler: handler.lambda_handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: [ 's3:GetObject' ]
+              Resource:
+                - !Sub arn:aws:s3:::${BucketName}/results/*
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties: { Path: /results/{job_id}, Method: get, RestApiId: !Ref Api, Auth: { ApiKeyRequired: true } }
+
+  # ---------- Lambda (S3 event) ----------
+  MedicalProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: medical-processor
+      CodeUri: ../lambdas/medical_processor/
+      Handler: handler.lambda_handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: [ 's3:GetObject','s3:HeadObject','s3:PutObject' ]
+              Resource:
+                - !Sub arn:aws:s3:::${BucketName}/uploads/*
+                - !Sub arn:aws:s3:::${BucketName}/jobs/*
+            - Effect: Allow
+              Action: [ 'cloudwatch:PutMetricData' ]
+              Resource: '*'
+            - Effect: Allow
+              Action: [ 'lambda:InvokeFunction' ]
+              Resource: !GetAtt AiAnalysisFunction.Arn
+
+  # wire S3 event -> medical-processor (filtered to prefix uploads/)
+  S3EventConfiguration:
+    Type: AWS::S3::BucketNotification
+    Properties:
+      Bucket: !Ref DataBucket
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: uploads/
+            Function: !GetAtt MedicalProcessorFunction.Arn
+
+  # ---------- AI/LLM Lambdas (owned by teammates; created so you can invoke) ----------
+  AiAnalysisFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Ref AiLambdaName
+      CodeUri: ../lambdas/ai_analysis/
+      Handler: handler.lambda_handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: [ 's3:GetObject','s3:PutObject' ]
+              Resource:
+                - !Sub arn:aws:s3:::${BucketName}/uploads/*
+                - !Sub arn:aws:s3:::${BucketName}/ai-results/*
+                - !Sub arn:aws:s3:::${BucketName}/jobs/*
+            - Effect: Allow
+              Action: [ 'lambda:InvokeFunction' ]
+              Resource: !GetAtt LlmProcessingFunction.Arn
+
+  LlmProcessingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Ref LlmLambdaName
+      CodeUri: ../lambdas/llm_processing/
+      Handler: handler.lambda_handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: [ 's3:GetObject','s3:PutObject' ]
+              Resource:
+                - !Sub arn:aws:s3:::${BucketName}/ai-results/*
+                - !Sub arn:aws:s3:::${BucketName}/results/*
+                - !Sub arn:aws:s3:::${BucketName}/jobs/*
+
+Outputs:
+  ApiBaseUrl:
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/prod"
