@@ -5,7 +5,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { Activity, FileText, Eye, BookOpen, Bell, Search, Settings, Shield, BarChart3, Menu, X } from "lucide-react"
+import { Activity, FileText, Eye, BookOpen, Bell, Search, Settings, Shield, BarChart3, Menu, X, Database } from "lucide-react"
 
 interface NavigationItem {
   id: string
@@ -17,6 +17,7 @@ interface NavigationItem {
 
 const navigationItems: NavigationItem[] = [
   { id: "triage", label: "Triage", icon: Activity, badge: "12" },
+  { id: "datasets", label: "Medical Datasets", icon: Database },
   { id: "search", label: "Search", icon: Search },
   { id: "integrations", label: "Pipeline Health", icon: BarChart3, adminOnly: true },
   { id: "audit", label: "Audit & Compliance", icon: Shield, adminOnly: true },

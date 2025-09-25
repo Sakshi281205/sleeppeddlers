@@ -1,13 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { mockCases, formatTimeAgo, getSeverityColor, type Case } from "@/components/mock-services"
+import { formatTimeAgo, getSeverityColor } from "@/components/mock-services"
+import { caseService, type Case } from "@/lib/case-service"
 import {
   Search,
   Filter,
@@ -31,8 +32,22 @@ export function WorklistDashboard({ initialFilter }: WorklistDashboardProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [priorityFilter, setPriorityFilter] = useState(initialFilter || "all")
+  const [cases, setCases] = useState<Case[]>([])
 
-  const filteredCases = mockCases.filter((case_) => {
+  // Load cases on mount
+  useEffect(() => {
+    const loadCases = () => {
+      setCases(caseService.getAllCases())
+    }
+    
+    loadCases()
+    
+    // Update cases every 2 seconds
+    const interval = setInterval(loadCases, 2000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const filteredCases = cases.filter((case_) => {
     const matchesSearch =
       case_.caseId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       case_.patient.display.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -156,7 +171,7 @@ export function WorklistDashboard({ initialFilter }: WorklistDashboardProps) {
               <CardTitle className="flex items-center justify-between">
                 <span>Cases ({filteredCases.length})</span>
                 <Badge variant="outline">
-                  {filteredCases.length} of {mockCases.length}
+                  {filteredCases.length} of {cases.length}
                 </Badge>
               </CardTitle>
             </CardHeader>

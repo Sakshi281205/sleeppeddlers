@@ -10,6 +10,7 @@ import { NotificationsCenter } from "@/components/notifications-center"
 import { SemanticSearch } from "@/components/semantic-search"
 import { PipelineHealth } from "@/components/pipeline-health"
 import { AuditCompliance } from "@/components/audit-compliance"
+import { MedicalDatasetViewer } from "@/components/medical-dataset-viewer"
 
 export default function MedicalImagingApp() {
   const [activeTab, setActiveTab] = useState("triage")
@@ -37,6 +38,8 @@ export default function MedicalImagingApp() {
         return <PipelineHealth />
       case "audit":
         return <AuditCompliance />
+      case "datasets":
+        return <MedicalDatasetViewer />
       case "settings":
         return <div className="p-6">Settings - Coming Soon</div>
       default:

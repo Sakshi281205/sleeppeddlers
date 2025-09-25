@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { mockCases, formatTimeAgo, getSeverityColor, type Case } from "@/components/mock-services"
+import { formatTimeAgo, getSeverityColor } from "@/components/mock-services"
+import { caseService, type Case } from "@/lib/case-service"
+import { DicomViewer } from "@/components/dicom-viewer"
 import { Eye, FileText, Clock, User, Calendar, Weight, Ruler } from "lucide-react"
 
 interface PatientWindowProps {
@@ -14,9 +16,10 @@ interface PatientWindowProps {
 
 export function PatientWindow({ caseId }: PatientWindowProps) {
   const [patientCase, setPatientCase] = useState<Case | null>(null)
+  const [showDicomViewer, setShowDicomViewer] = useState(false)
 
   useEffect(() => {
-    const foundCase = mockCases.find(c => c.caseId === caseId)
+    const foundCase = caseService.getCase(caseId)
     setPatientCase(foundCase || null)
   }, [caseId])
 
@@ -165,7 +168,11 @@ export function PatientWindow({ caseId }: PatientWindowProps) {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowDicomViewer(true)}
+                >
                   <Eye className="h-4 w-4 mr-2" />
                   Open Viewer
                 </Button>
@@ -218,6 +225,14 @@ export function PatientWindow({ caseId }: PatientWindowProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* DICOM Viewer Modal */}
+      {showDicomViewer && (
+        <DicomViewer
+          caseId={caseId}
+          onClose={() => setShowDicomViewer(false)}
+        />
+      )}
     </div>
   )
 }

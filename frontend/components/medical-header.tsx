@@ -1,9 +1,11 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { notificationService } from "@/lib/notification-service"
 import { Activity, Bell, Settings, Shield, Database } from "lucide-react"
 
 interface MedicalHeaderProps {
@@ -13,6 +15,19 @@ interface MedicalHeaderProps {
 }
 
 export function MedicalHeader({ userRole, facility, userName }: MedicalHeaderProps) {
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    const updateUnreadCount = () => {
+      setUnreadCount(notificationService.getUnreadCount())
+    }
+    
+    updateUnreadCount()
+    const unsubscribe = notificationService.subscribe(updateUnreadCount)
+    
+    return unsubscribe
+  }, [])
+
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur-sm">
       <div className="flex h-16 items-center justify-between px-6">
@@ -43,8 +58,16 @@ export function MedicalHeader({ userRole, facility, userName }: MedicalHeaderPro
 
           <ThemeToggle />
 
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="relative">
             <Bell className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <Badge 
+                variant="destructive" 
+                className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs"
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Badge>
+            )}
           </Button>
 
           <Button variant="ghost" size="sm">

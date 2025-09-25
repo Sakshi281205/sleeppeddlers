@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { mockCases, type Case } from "@/components/mock-services"
+import { caseService, type Case } from "@/lib/case-service"
 import {
   Search,
   ExternalLink,
@@ -51,7 +51,14 @@ interface GraniteSummary {
 }
 
 export function ClinicalGuidance() {
-  const [selectedCase] = useState<Case>(mockCases[0])
+  const [selectedCase, setSelectedCase] = useState<Case | null>(null)
+  
+  useEffect(() => {
+    const cases = caseService.getAllCases()
+    if (cases.length > 0) {
+      setSelectedCase(cases[0])
+    }
+  }, [])
   const [activeTab, setActiveTab] = useState("evidence")
 
   const mockGuidelines: Guideline[] = [

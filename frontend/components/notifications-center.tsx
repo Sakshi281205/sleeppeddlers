@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { mockNotifications, formatTimeAgo, type Notification } from "@/components/mock-services"
+import { formatTimeAgo } from "@/components/mock-services"
+import { notificationService, type Notification } from "@/lib/notification-service"
 import {
   Bell,
   AlertTriangle,
@@ -25,9 +26,29 @@ import {
 } from "lucide-react"
 
 export function NotificationsCenter() {
-  const [notifications, setNotifications] = useState(mockNotifications)
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
   const [filter, setFilter] = useState("all")
+
+  // Load notifications on mount
+  useEffect(() => {
+    const loadNotifications = () => {
+      setNotifications(notificationService.getAllNotifications())
+    }
+    
+    loadNotifications()
+    
+    // Subscribe to notification updates
+    const unsubscribe = notificationService.subscribe(loadNotifications)
+    
+    // Add mock notifications if none exist
+    if (notificationService.getAllNotifications().length === 0) {
+      notificationService.addMockNotifications()
+      loadNotifications()
+    }
+    
+    return unsubscribe
+  }, [])
 
   const filteredNotifications = notifications.filter((notif) => {
     if (filter === "all") return true
@@ -37,13 +58,11 @@ export function NotificationsCenter() {
   })
 
   const markAsRead = (notificationId: string) => {
-    setNotifications((prev) =>
-      prev.map((notif) => (notif.id === notificationId ? { ...notif, ack: { state: "READ" } } : notif)),
-    )
+    notificationService.markAsRead(notificationId)
   }
 
   const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((notif) => ({ ...notif, ack: { state: "READ" as const } })))
+    notificationService.markAllAsRead()
   }
 
   const getSeverityIcon = (severity: Notification["severity"]) => {

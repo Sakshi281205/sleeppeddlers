@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { mockCases, formatTimeAgo, type Case } from "@/components/mock-services"
+import { formatTimeAgo } from "@/components/mock-services"
+import { caseService, type Case } from "@/lib/case-service"
 import {
   Shield,
   Eye,
@@ -215,7 +216,7 @@ export function AuditCompliance() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {mockCases.slice(0, 3).map((case_) => (
+                    {caseService.getAllCases().slice(0, 3).map((case_) => (
                       <Card
                         key={case_.caseId}
                         className={`cursor-pointer transition-colors hover:bg-accent/50 ${

@@ -1,17 +1,50 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
-import { mockCases, formatTimeAgo, getSeverityColor, type Case } from "@/components/mock-services"
+import { formatTimeAgo, getSeverityColor } from "@/components/mock-services"
 import { FileUpload } from "@/components/file-upload"
+import { caseService, type Case } from "@/lib/case-service"
 import { Clock, AlertTriangle, CheckCircle, Brain, Upload, Eye, Filter, Search } from "lucide-react"
 
 export function TriageDashboard() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [cases, setCases] = useState<Case[]>([])
+
+  // Load cases on component mount
+  useEffect(() => {
+    try {
+      const allCases = caseService.getAllCases()
+      setCases(allCases)
+      
+      // If no cases, add real medical dataset cases
+      if (allCases.length === 0) {
+        caseService.addRealMedicalCases()
+        setCases(caseService.getAllCases())
+      }
+    } catch (error) {
+      console.error('Failed to load cases:', error)
+      // Fallback to empty array
+      setCases([])
+    }
+  }, [])
+
+  // Update cases when new ones are added
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        setCases(caseService.getAllCases())
+      } catch (error) {
+        console.error('Failed to update cases:', error)
+      }
+    }, 2000) // Check every 2 seconds for updates
+
+    return () => clearInterval(interval)
+  }, [])
 
   // Debounced search
   const debouncedSearchQuery = useMemo(() => {
@@ -20,17 +53,17 @@ export function TriageDashboard() {
   }, [searchQuery])
 
   const filteredCases = useMemo(() => {
-    if (!searchQuery.trim()) return mockCases
+    if (!searchQuery.trim()) return cases
     
     const query = searchQuery.toLowerCase()
-    return mockCases.filter((case_) => 
+    return cases.filter((case_) => 
       case_.patient.display.toLowerCase().includes(query) ||
       case_.patient.mrnMasked.toLowerCase().includes(query) ||
       case_.priority.toLowerCase().includes(query) ||
       case_.modality.toLowerCase().includes(query) ||
       case_.bodyPart.toLowerCase().includes(query)
     )
-  }, [searchQuery])
+  }, [searchQuery, cases])
 
   const statCases = filteredCases.filter((c) => c.priority === "STAT").slice(0, 3)
   const urgentCases = filteredCases.filter((c) => c.priority === "URGENT").slice(0, 3)
@@ -231,7 +264,7 @@ export function TriageDashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {mockCases.slice(0, 3).map((case_) => (
+            {cases.slice(0, 3).map((case_) => (
               <div
                 key={case_.caseId}
                 className="flex items-center justify-between py-2 border-b border-border last:border-0"
