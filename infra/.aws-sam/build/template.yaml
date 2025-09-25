@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: "sleeppeddlers \u2013 API+S3+Lambda flow with DLQs, metrics, validation,\
+Description: "sleeppeddlers \u2013 API + S3 + Lambda flow with DLQs, metrics, validation,\
   \ tracing"
 Parameters:
   BucketName:
@@ -18,7 +18,7 @@ Parameters:
     Default: llm-processing-function
 Globals:
   Function:
-    Runtime: python3.12
+    Runtime: python3.11
     Timeout: 15
     MemorySize: 512
     Tracing: Active
@@ -44,8 +44,12 @@ Globals:
         Fn::GetAtt:
         - ApiAccessLogGroup
         - Arn
-      Format: '{ "requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"
-        }'
+      Format: "{\n  \"requestId\":\"$context.requestId\",\n  \"ip\":\"$context.identity.sourceIp\"\
+        ,\n  \"caller\":\"$context.identity.caller\",\n  \"user\":\"$context.identity.user\"\
+        ,\n  \"requestTime\":\"$context.requestTime\",\n  \"httpMethod\":\"$context.httpMethod\"\
+        ,\n  \"resourcePath\":\"$context.resourcePath\",\n  \"status\":\"$context.status\"\
+        ,\n  \"protocol\":\"$context.protocol\",\n  \"responseLength\":\"$context.responseLength\"\
+        \n}\n"
 Resources:
   DataBucket:
     Type: AWS::S3::Bucket
@@ -73,22 +77,43 @@ Resources:
           Status: Enabled
           Prefix: ai-results/
           ExpirationInDays: 14
-  MedicalProcessorPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName:
-        Ref: MedicalProcessorFunction
-      Principal: s3.amazonaws.com
-      SourceArn:
-        Fn::GetAtt:
-        - DataBucket
-        - Arn
   ApiAccessLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /aws/apigw/sleeppeddlers
       RetentionInDays: 7
+  ApiGatewayCloudWatchLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: apigw-cloudwatch-logs-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: apigateway.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: ApiGatewayCWLogs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:DescribeLogGroups
+            - logs:DescribeLogStreams
+            - logs:PutLogEvents
+            Resource: '*'
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    DependsOn: ApiGatewayCloudWatchLogsRole
+    Properties:
+      CloudWatchRoleArn:
+        Fn::GetAtt:
+        - ApiGatewayCloudWatchLogsRole
+        - Arn
   GlobalDLQ:
     Type: AWS::SQS::Queue
     Properties:
@@ -96,6 +121,8 @@ Resources:
       MessageRetentionPeriod: 1209600
   Api:
     Type: AWS::Serverless::Api
+    DependsOn:
+    - ApiGatewayAccount
     Properties:
       Name: sleeppeddlers-api
       StageName: prod
@@ -114,74 +141,13 @@ Resources:
         DataTraceEnabled: false
         ThrottlingRateLimit: 50
         ThrottlingBurstLimit: 25
-      DefinitionBody:
-        openapi: 3.0.1
-        info:
-          title: sleeppeddlers
-          version: '1.0'
-        paths:
-          /upload:
-            post:
-              security:
-              - api_key: []
-              requestBody:
-                required: true
-                content:
-                  application/json:
-                    schema:
-                      type: object
-                      required:
-                      - image
-                      - filename
-                      - content_type
-                      properties:
-                        image:
-                          type: string
-                        filename:
-                          type: string
-                        content_type:
-                          type: string
-              responses:
-                '200':
-                  description: OK
-          /status/{job_id}:
-            get:
-              security:
-              - api_key: []
-              parameters:
-              - in: path
-                name: job_id
-                required: true
-                schema:
-                  type: string
-              responses:
-                '200':
-                  description: OK
-                '202':
-                  description: Processing
-                '404':
-                  description: Not found
-          /results/{job_id}:
-            get:
-              security:
-              - api_key: []
-              parameters:
-              - in: path
-                name: job_id
-                required: true
-                schema:
-                  type: string
-              responses:
-                '200':
-                  description: OK
-                '404':
-                  description: Not found
-        components:
-          securitySchemes:
-            api_key:
-              type: apiKey
-              name: x-api-key
-              in: header
+      AccessLogSetting:
+        DestinationArn:
+          Fn::GetAtt:
+          - ApiAccessLogGroup
+          - Arn
+        Format: '{ "requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"
+          }'
   ApiKey:
     Type: AWS::ApiGateway::ApiKey
     Properties:
@@ -191,6 +157,9 @@ Resources:
         Ref: ApiKeyValue
   UsagePlan:
     Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+    - Api
+    - ApiprodStage
     Properties:
       UsagePlanName: sleeppeddlers-plan
       Throttle:
@@ -218,15 +187,9 @@ Resources:
       CodeUri: UploadApi
       Handler: handler.lambda_handler
       Policies:
-      - Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Action:
-          - s3:PutObject
-          - s3:PutObjectAcl
-          Resource:
-          - Fn::Sub: arn:aws:s3:::${BucketName}/uploads/*
-          - Fn::Sub: arn:aws:s3:::${BucketName}/jobs/*
+      - S3CrudPolicy:
+          BucketName:
+            Ref: BucketName
       Events:
         ApiEvent:
           Type: Api
@@ -246,15 +209,9 @@ Resources:
       CodeUri: StatusApi
       Handler: handler.lambda_handler
       Policies:
-      - Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Action:
-          - s3:GetObject
-          - s3:HeadObject
-          Resource:
-          - Fn::Sub: arn:aws:s3:::${BucketName}/jobs/*
-          - Fn::Sub: arn:aws:s3:::${BucketName}/results/*
+      - S3ReadPolicy:
+          BucketName:
+            Ref: BucketName
       Events:
         ApiEvent:
           Type: Api
@@ -274,13 +231,9 @@ Resources:
       CodeUri: ResultsApi
       Handler: handler.lambda_handler
       Policies:
-      - Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Action:
-          - s3:GetObject
-          Resource:
-          - Fn::Sub: arn:aws:s3:::${BucketName}/results/*
+      - S3ReadPolicy:
+          BucketName:
+            Ref: BucketName
       Events:
         ApiEvent:
           Type: Api
@@ -300,20 +253,12 @@ Resources:
       CodeUri: MedicalProcessorFunction
       Handler: handler.lambda_handler
       Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: BucketName
+      - CloudWatchPutMetricPolicy: {}
       - Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Action:
-          - s3:GetObject
-          - s3:HeadObject
-          - s3:PutObject
-          Resource:
-          - Fn::Sub: arn:aws:s3:::${BucketName}/uploads/*
-          - Fn::Sub: arn:aws:s3:::${BucketName}/jobs/*
-        - Effect: Allow
-          Action:
-          - cloudwatch:PutMetricData
-          Resource: '*'
         - Effect: Allow
           Action:
           - lambda:InvokeFunction
@@ -321,25 +266,20 @@ Resources:
             Fn::GetAtt:
             - AiAnalysisFunction
             - Arn
+      Events:
+        UploadS3Event:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: DataBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: prefix
+                  Value: uploads/
     Metadata:
       SamResourceId: MedicalProcessorFunction
-  S3EventConfiguration:
-    Type: AWS::S3::BucketNotification
-    Properties:
-      Bucket:
-        Ref: DataBucket
-      NotificationConfiguration:
-        LambdaConfigurations:
-        - Event: s3:ObjectCreated:*
-          Filter:
-            S3Key:
-              Rules:
-              - Name: prefix
-                Value: uploads/
-          Function:
-            Fn::GetAtt:
-            - MedicalProcessorFunction
-            - Arn
   AiAnalysisFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -348,16 +288,11 @@ Resources:
       CodeUri: AiAnalysisFunction
       Handler: handler.lambda_handler
       Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: BucketName
       - Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Action:
-          - s3:GetObject
-          - s3:PutObject
-          Resource:
-          - Fn::Sub: arn:aws:s3:::${BucketName}/uploads/*
-          - Fn::Sub: arn:aws:s3:::${BucketName}/ai-results/*
-          - Fn::Sub: arn:aws:s3:::${BucketName}/jobs/*
         - Effect: Allow
           Action:
           - lambda:InvokeFunction
@@ -375,16 +310,9 @@ Resources:
       CodeUri: LlmProcessingFunction
       Handler: handler.lambda_handler
       Policies:
-      - Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Action:
-          - s3:GetObject
-          - s3:PutObject
-          Resource:
-          - Fn::Sub: arn:aws:s3:::${BucketName}/ai-results/*
-          - Fn::Sub: arn:aws:s3:::${BucketName}/results/*
-          - Fn::Sub: arn:aws:s3:::${BucketName}/jobs/*
+      - S3CrudPolicy:
+          BucketName:
+            Ref: BucketName
     Metadata:
       SamResourceId: LlmProcessingFunction
 Outputs:
