@@ -13,3 +13,12 @@ frontend/out
 .env*
 *.log
 .DS_Store
+node_modules
+.next
+frontend/node_modules
+frontend/.next
+frontend/out
+out
+.env*
+*.log
+.DS_Store
