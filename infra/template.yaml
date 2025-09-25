@@ -87,6 +87,38 @@ Resources:
       LogGroupName: /aws/apigw/sleeppeddlers
       RetentionInDays: 7
 
+  # ---------- API Gateway → CloudWatch Logs role & account binding ----------
+  ApiGatewayCloudWatchLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: apigw-cloudwatch-logs-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: ApiGatewayCWLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    DependsOn: ApiGatewayCloudWatchLogsRole
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchLogsRole.Arn
+
   GlobalDLQ:
     Type: AWS::SQS::Queue
     Properties:
@@ -96,6 +128,8 @@ Resources:
   # ---------- API Gateway ----------
   Api:
     Type: AWS::Serverless::Api
+    DependsOn:
+      - ApiGatewayAccount
     Properties:
       Name: sleeppeddlers-api
       StageName: prod
@@ -113,63 +147,9 @@ Resources:
           DataTraceEnabled: false
           ThrottlingRateLimit: 50
           ThrottlingBurstLimit: 25
-      DefinitionBody:
-        openapi: 3.0.1
-        info:
-          title: sleeppeddlers
-          version: '1.0'
-        paths:
-          /upload:
-            post:
-              security:
-                - api_key: []
-              requestBody:
-                required: true
-                content:
-                  application/json:
-                    schema:
-                      type: object
-                      required: [image, filename, content_type]
-                      properties:
-                        image:
-                          type: string
-                        filename:
-                          type: string
-                        content_type:
-                          type: string
-              responses:
-                '200': { description: OK }
-          /status/{job_id}:
-            get:
-              security:
-                - api_key: []
-              parameters:
-                - in: path
-                  name: job_id
-                  required: true
-                  schema: { type: string }
-              responses:
-                '200': { description: OK }
-                '202': { description: Processing }
-                '404': { description: Not found }
-          /results/{job_id}:
-            get:
-              security:
-                - api_key: []
-              parameters:
-                - in: path
-                  name: job_id
-                  required: true
-                  schema: { type: string }
-              responses:
-                '200': { description: OK }
-                '404': { description: Not found }
-        components:
-          securitySchemes:
-            api_key:
-              type: apiKey
-              name: x-api-key
-              in: header
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '{ "requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength" }'
 
   ApiKey:
     Type: AWS::ApiGateway::ApiKey
@@ -180,6 +160,9 @@ Resources:
 
   UsagePlan:
     Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+      - Api
+      - ApiprodStage
     Properties:
       UsagePlanName: sleeppeddlers-plan
       Throttle:
