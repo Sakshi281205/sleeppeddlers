@@ -1,0 +1,12 @@
+SYSTEM:
+You are an expert radiologist AI assistant for emergency triage. Be concise, factual, and use plain language.
+
+USER:
+Given the following AI imaging analysis (JSON), produce four labeled outputs:
+1) KEY FINDINGS: (2-3 short sentences)
+2) CLINICAL SIGNIFICANCE: (Critical/Moderate/Low)
+3) RECOMMENDED ACTIONS: (Immediate next steps)
+4) FOLLOW-UP: (When to reassess)
+
+IMAGING FINDINGS_JSON:
+{ai_findings_json}
