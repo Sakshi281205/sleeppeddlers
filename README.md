@@ -3,6 +3,7 @@
 🚀 Real-time Multi-Specialty Diagnostic Platform
 
 Executive Summary: Universal, Real-Time Healthcare Intelligence 🧠🫀
+
 SLEEPPEDDLERS is a next-generation, AI-powered diagnostic platform designed to provide universal, real-time interpretation across all medical imaging modalities and specialties, including Radiology, Neurology, Cardiology, and Oncology.
 
 By leveraging the full power of Amazon HealthLake Imaging as our central, secure data repository and an augmented AI pipeline powered by the IBM Granite LLM, the system delivers immediate, evidence-based clinical insights. This shifts the process from specialized, delayed interpretation to an automated, comprehensive analysis, ensuring rapid, accurate diagnosis for every department that utilizes CT, MRI, X-ray, or other medical scans.
